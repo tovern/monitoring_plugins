@@ -1,0 +1,83 @@
+#!/bin/sh
+#####################################################################################
+# check_iostat_wrapper                                                              #
+# just a quick wrapper script to format the existing Nagios plugin for Sensu+Influx #
+# Tom Vernon 26/11/2018                                                             #
+#####################################################################################
+
+PROGNAME="check_iostat_wrapper"
+VERSION=1.0
+# Exit codes
+STATE_OK=0
+STATE_WARNING=1
+STATE_CRITICAL=2
+STATE_UNKNOWN=3
+
+# Helper functions #############################################################
+
+function print_revision {
+   # Print the revision number
+   echo "$PROGNAME - $VERSION"
+}
+
+function print_usage {
+   # Print a short usage statement
+   echo "Usage: $PROGNAME -d <device_name>"
+}
+
+function print_help {
+   # Print detailed help information
+   print_revision
+   print_usage
+
+   /bin/cat <<__EOT
+
+Options:
+-h
+   Print detailed help screen
+-V
+   Print version information
+-d
+   IP address of VTM
+__EOT
+   echo -e "\nCheck your parameters"
+}
+
+# Main stuff ####################################################################
+#Get some input
+while getopts "hVd:" OPTION
+do
+     case $OPTION in
+         h)
+             print_help
+             exit $STATE_WARNING
+             ;;
+         V)
+             print_revision
+             exit $STATE_WARNING
+             ;;
+         d)
+             DEVICE=$OPTARG
+             ;;
+     esac
+done
+
+if [[ -z $DEVICE ]]
+then
+        print_help
+        exit $STATE_WARNING
+fi
+
+STATS=`/opt/sensu/embedded/bin/check_iostat -i -d $DEVICE`
+EPOCHTIME=`date +%s`
+IOPSTOT=`echo $STATS | cut -f5 -d" " | cut -f2 -d"="`
+IOPSREAD=`echo $STATS | cut -f7 -d" " | cut -f2 -d"="`
+IOPSWRITE=`echo $STATS | cut -f9 -d" " | cut -f2 -d"="`
+
+if [[ ! -z $STATS ]]; then
+        echo -e "iops.iops_total $IOPSTOT $EPOCHTIME\niops.iops_read $IOPSREAD $EPOCHTIME\niops.iops_write $IOPSWRITE $EPOCHTIME"
+        exit $STATE_OK
+else
+        echo "UNKNOWN: Something went wrong"
+        exit $STATE_UNKNOWN
+fi
